@@ -62,11 +62,18 @@ final class SSHClientInboundChannelHandler: Sendable {
     }
 }
 
-final class ClientHandshakeHandler: ChannelInboundHandler, Sendable {
+final class ClientHandshakeHandler: ChannelInboundHandler, RemovableChannelHandler, Sendable {
     typealias InboundIn = Any
 
     private let promise: EventLoopPromise<Void>
+    private let loginTimeout: TimeAmount
+    private let state: NIOLoopBoundBox<HandshakeState?>
     let logger = Logger(label: "nl.orlandos.citadel.handshake")
+
+    private struct HandshakeState {
+        var completed = false
+        var timeoutTask: Scheduled<Void>?
+    }
 
     /// A future that will be fulfilled when the handshake is complete.
     public var authenticated: EventLoopFuture<Void> {
@@ -74,22 +81,64 @@ final class ClientHandshakeHandler: ChannelInboundHandler, Sendable {
     }
 
     init(eventLoop: EventLoop, loginTimeout: TimeAmount) {
-        let promise = eventLoop.makePromise(of: Void.self)
-        self.promise = promise
+        self.promise = eventLoop.makePromise(of: Void.self)
+        self.loginTimeout = loginTimeout
+        self.state = .makeEmptyBox(eventLoop: eventLoop)
+    }
 
-        eventLoop.scheduleTask(deadline: .now() + loginTimeout) {
-            promise.fail(ChannelError.connectTimeout(loginTimeout))
+    func handlerAdded(context: ChannelHandlerContext) {
+        // A removed observer keeps its terminal result; re-insertion must not
+        // restart a login deadline for an already completed handshake.
+        guard self.state.value == nil else { return }
+        self.state.value = HandshakeState()
+        let boundContext = NIOLoopBound(context, eventLoop: context.eventLoop)
+        self.state.value?.timeoutTask = context.eventLoop.scheduleTask(in: self.loginTimeout) { [weak self] in
+            guard let self, self.state.value?.completed == false else { return }
+            self.completeHandshake(.failure(ChannelError.connectTimeout(self.loginTimeout)))
+            boundContext.value.close(promise: nil)
+        }
+        // NIOSSH consumes channelInactive, so the parent close future is the
+        // authoritative disconnect signal for a still-waiting handshake.
+        context.channel.closeFuture.whenComplete { [weak self] _ in
+            self?.completeHandshake(.failure(ChannelError.eof))
         }
     }
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
         if event is UserAuthSuccessEvent {
-            self.promise.succeed(())
+            self.completeHandshake(.success(()))
         }
+        context.fireUserInboundEventTriggered(event)
     }
 
     func errorCaught(context: ChannelHandlerContext, error: any Error) {
-        self.promise.fail(error)
+        self.completeHandshake(.failure(error))
+        // Once authenticated the handshake promise is already fulfilled, but
+        // a fatal SSH error must still close the transport and its child channels.
+        logger.debug("Closing SSH client transport after an error")
+        context.close(promise: nil)
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        self.completeHandshake(.failure(ChannelError.eof))
+        context.fireChannelInactive()
+    }
+
+    func handlerRemoved(context: ChannelHandlerContext) {
+        let wasWaiting = self.state.value?.completed == false
+        self.completeHandshake(.failure(ChannelError.ioOnClosedChannel))
+        if wasWaiting {
+            context.close(promise: nil)
+        }
+    }
+
+    private func completeHandshake(_ result: Result<Void, Error>) {
+        guard self.state.value?.completed == false else { return }
+        self.state.value?.completed = true
+        let task = self.state.value?.timeoutTask
+        self.state.value?.timeoutTask = nil
+        task?.cancel()
+        self.promise.completeWith(result)
     }
     
     deinit {
