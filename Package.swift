@@ -16,8 +16,8 @@ let package = Package(
         ),
     ],
     dependencies: [
-        // .package(path: "/Users/joannisorlandos/git/joannis/swift-nio-ssh"),
-        .package(url: "https://github.com/Joannis/swift-nio-ssh.git", "0.3.4" ..< "0.4.0"),
+        // Compatible fork with the CVE-2026-43798 signature bounds fix backported.
+        .package(url: "https://github.com/Olorin-ai-git/swift-nio-ssh.git", revision: "57a5f7fbea1e6512e3033782165fcd4b15a129a3"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
         .package(url: "https://github.com/attaswift/BigInt.git", from: "5.2.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.12.3"),
