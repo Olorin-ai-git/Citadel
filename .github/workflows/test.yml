@@ -4,7 +4,7 @@ concurrency:
     cancel-in-progress: true
 on:
     pull_request: { types: [opened, reopened, synchronize, ready_for_review] }
-    push: { branches: [main, claudette-0.12] }
+    push: { branches: [main, claudette-0.12, fix/claudette-security-20260912-74075] }
 
 env:
     LOG_LEVEL: info
