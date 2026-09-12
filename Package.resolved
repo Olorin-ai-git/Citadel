@@ -77,7 +77,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Olorin-ai-git/swift-nio-ssh.git",
       "state" : {
-        "revision" : "57a5f7fbea1e6512e3033782165fcd4b15a129a3"
+        "revision" : "f6088b867cab1ee4b8796c593dbd8181bf38c13f"
       }
     },
     {
