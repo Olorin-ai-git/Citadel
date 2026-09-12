@@ -16,8 +16,9 @@ let package = Package(
         ),
     ],
     dependencies: [
-        // .package(path: "/Users/joannisorlandos/git/joannis/swift-nio-ssh"),
-        .package(url: "https://github.com/Joannis/swift-nio-ssh.git", "0.3.4" ..< "0.4.0"),
+        // Compatible fork with the CVE-2026-43798 signature bounds fix backported.
+        .package(url: "https://github.com/Olorin-ai-git/swift-nio-ssh.git", revision: "70bfcf6da8214e42e00e74fcea49c101ca5ac3e9"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.100.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
         .package(url: "https://github.com/attaswift/BigInt.git", from: "5.2.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.12.3"),
@@ -46,6 +47,7 @@ let package = Package(
             name: "CitadelTests",
             dependencies: [
                 "Citadel",
+                .product(name: "NIOEmbedded", package: "swift-nio"),
                 .product(name: "NIOSSH", package: "swift-nio-ssh"),
                 .product(name: "BigInt", package: "BigInt"),
                 .product(name: "Logging", package: "swift-log"),
